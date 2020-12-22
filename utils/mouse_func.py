@@ -12,5 +12,9 @@ def setMouseCallback(window_name, onMouse):
     cv2.setMouseCallback(window_name, onMouse)
 
 
-def selectColor(event, x, y, flags, param):
-    if event == cv2.EVENT_LBUTTONDBLCLK:
+def drawCircle(img, center, radius, color=(0, 255, 0), thick=1):
+    draw = cv2.circle(img, center, radius, color, thickness=thick)
+
+
+def createTrackbar(trackbar_name, window_name, on_change, value=5, count=50):
+    cv2.createTrackbar(trackbar_name, window_name, value, count, on_change)
