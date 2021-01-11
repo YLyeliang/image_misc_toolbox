@@ -26,6 +26,9 @@ class Labeler(object):
         self.img_window = img_window
         self.mask_window = mask_window
         self.radius = 5
+        self.range = 20
+        self.draw = False
+        self.coord = (0, 0)
 
     def buildWindow(self):
         namedWindow(self.img_window)
@@ -34,17 +37,26 @@ class Labeler(object):
     def change_radius(self, x):
         self.radius = x
 
+    def color_range(self, x):
+        self.range = x
+
     def selectColor(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDBLCLK:
-            self.val = self.img[y, x]
-            indices = self.img[:, :, ] == self.val
-            indices = np.sum(indices, axis=2)
-            indices = np.where(indices == 3)
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self.val = self.img[y, x].astype(np.int64)
+            low = np.clip(self.val - self.range, 0, 255)
+            high = np.clip(self.val + self.range, 0, 255)
+
+            mask = cv2.inRange(self.img, low, high)
+            indices = mask == 255
             self.mask[indices] = 255
 
     def removeRegion(self, event, x, y, flags, param):
         if event == cv2.EVENT_RBUTTONDOWN:
-            drawCircle(self.mask, (x, y), self.radius, color=0, thick=-1)
+            self.draw = True
+        elif event == cv2.EVENT_MOUSEMOVE:
+            self.coord = (x, y)
+        elif event == cv2.EVENT_RBUTTONUP:
+            self.draw = False
 
     def prepare(self):
         """
@@ -55,24 +67,31 @@ class Labeler(object):
         """
         if not osp.exists(self.img_dir):
             raise FileExistsError(f"Path {self.img_dir} is not found.")
+        if not osp.exists(self.img_out):
+            os.makedirs(self.img_out)
         if not osp.exists(self.mask_out):
             os.makedirs(self.mask_out)
         file_list = os.listdir(self.img_dir)
         self.file_list = [osp.join(self.img_dir, file) for file in file_list]
 
     def run(self):
+        print("Initialize the labeling tool.")
         self.prepare()
         self.buildWindow()
+        print("Reading, building windows, and make directories accomplished.")
         for file in self.file_list:
             self.img = cv2.imread(file)
             self.mask = np.zeros(self.img.shape[:2], dtype=np.uint8)
             setMouseCallback(self.img_window, self.selectColor)
             setMouseCallback(self.mask_window, self.removeRegion)
             createTrackbar('radius', self.mask_window, self.change_radius, 5, 50)
+            createTrackbar('colorRange', self.img_window, self.color_range)
             while True:
                 cv2.imshow(self.img_window, self.img)
                 cv2.imshow(self.mask_window, self.mask)
                 key = cv2.waitKey(1)
+                if self.draw:
+                    drawCircle(self.mask, self.coord, self.radius, color=0, thick=-1)
                 if key == ord('s'):  # preserve the result.
                     seg_map = np.where(self.mask == 255, 1, 0)
                     if self.img_suffix in osp.basename(file):
@@ -89,7 +108,4 @@ class Labeler(object):
                     break
 
 
-root = "/Users/fiberhome/Downloads/paint_data/image"
-out = "/Users/fiberhome/Downloads/paint_data/label_debug"
-labelr = Labeler(root, root, out)
-labelr.run()
+
